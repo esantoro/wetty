@@ -75,9 +75,10 @@ process.on('uncaughtException', function(e) {
 var httpserv;
 
 var app = express();
-app.get('/wetty/ssh/:user', function(req, res) {
+app.get('/wetty/ssh/:user/:host', function(req, res) {
     res.sendfile(__dirname + '/public/wetty/index.html');
 });
+
 app.use('/', express.static(path.join(__dirname, 'public')));
 
 if (runhttps) {
@@ -93,28 +94,31 @@ if (runhttps) {
 var io = server(httpserv,{path: '/wetty/socket.io'});
 io.on('connection', function(socket){
     var sshuser = '';
+    var sshhost = '';
     var request = socket.request;
     console.log((new Date()) + ' Connection accepted.');
-    if (match = request.headers.referer.match('/wetty/ssh/.+$')) {
-        sshuser = match[0].replace('/wetty/ssh/', '') + '@';
+    if (match = request.headers.referer.match('/wetty/ssh/(([a-z0-9]+)/)?(.+)$')) {
+	console.log(match);
+	console.log("Username: " + match[2]);
+	console.log("Host: " + match[3]);
+
+	// crucial
+	sshuser = match[2] ;
+	sshhost = match[3] ;
+	//
+	
+        // sshuser = match[0].replace('/wetty/ssh/', '') + '@';
     } else if (globalsshuser) {
         sshuser = globalsshuser + '@';
     }
-
+    
     var term;
-    if (process.getuid() == 0) {
-        term = pty.spawn('/usr/bin/env', ['login'], {
-            name: 'xterm-256color',
-            cols: 80,
-            rows: 30
-        });
-    } else {
-        term = pty.spawn('ssh', [sshuser + sshhost, '-p', sshport, '-o', 'PreferredAuthentications=' + sshauth], {
-            name: 'xterm-256color',
-            cols: 80,
-            rows: 30
-        });
-    }
+    term = pty.spawn('ssh', [sshuser + '@' + sshhost, '-p', sshport, '-o', 'PreferredAuthentications=' + sshauth], {
+        name: 'xterm-256color',
+        cols: 80,
+        rows: 30
+    });
+    
     console.log((new Date()) + " PID=" + term.pid + " STARTED on behalf of user=" + sshuser)
     term.on('data', function(data) {
         socket.emit('output', data);
